@@ -35,6 +35,13 @@ int S = 100; // 0-100
 int I =  10; // 0-100
 
 
+// IR sensor
+#define IR_INPUT A2
+#define IR_LED   9
+
+int IR_val = 0;
+
+
 // the setup routine runs once when you press reset:
 void setup() {
   // initialize the digital pin as an output.
@@ -42,6 +49,9 @@ void setup() {
   pinMode(pinRed, OUTPUT);
   pinMode(pinGreen, OUTPUT);
   pinMode(pinBlue, OUTPUT);
+
+  pinMode(IR_INPUT, INPUT);
+  pinMode(IR_LED, OUTPUT);
 
   mySerial.begin(9600);
   mySerial.println("Connected!");
@@ -62,11 +72,20 @@ void loop() {
   }
 */
 
+  // Collect every cycle
+  digitalWrite(IR_LED, HIGH);
+  IR_val = 0.8*IR_val + 0.2*analogRead(IR_INPUT);
+  digitalWrite(IR_LED, LOW);
+
+  I = constrain(IR_val/2, 0, 100);
+  H = map(IR_val, 40, 400, 120, 0);
+  H = constrain(H, 0, 120);
+
   while (mySerial.available()) {
     buf[i] = mySerial.read();
     
-    // If newline encountered
-    if (buf[i] == '\r' || buf[i] == '\n') {
+    // If newline or brightness encountered or buffer full
+    if (buf[i] == '\r' || buf[i] == '\n' || i==19) {
       i++;
       buf[i] = '\0';      // terminate the string
       serialReady = true; // mark for processing
@@ -99,6 +118,7 @@ void loop() {
       switch(buf[i]) {
         case 13: // CR
         case 10: // LF
+        case 0:
           break;
         case 'H':
         case 'S':
@@ -114,6 +134,11 @@ void loop() {
           // Save the new mode
           mode = buf[i];
           temp = 0;
+          break;
+        case 'd':
+          // IR
+          mySerial.print("IR: ");
+          mySerial.println(IR_val);
           break;
         default:
           // Detect numbers
@@ -131,7 +156,7 @@ void loop() {
   
     // Report out
     if (len > 0) {
-      mySerial.println(buf);
+      //mySerial.println(buf);
       mySerial.print("H ");
       mySerial.print(H);
       mySerial.print(" S ");
