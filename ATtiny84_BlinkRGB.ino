@@ -11,14 +11,31 @@
 
 #define rxPin 10
 #define txPin 0
+
 SoftwareSerial mySerial(rxPin, txPin);
-char buf[20];
+byte myAddr = 0;   // Store address of this node
+
+
+// Communication state variables
+bool forward;      // Flag to forward current command to next node
+byte cmd[6];       // Command array
+int cmdLength;     // Command bytes received
+
+byte buf[20];
 int i = 0;         // general counter
 int len = 0;       // buffer length (0-based)
 int temp = 0;      // current integer built up
 char mode = '\0';  // current mode (H/S/I)
 bool serialReady = false;
 
+
+// IR sensor
+#define IR_INPUT A2
+#define IR_LED   9
+
+// IR state variables
+int IR_val = 0;
+bool IR_enabled = true;
 
 
 // LEDs
@@ -29,17 +46,15 @@ int pinRed   = 6;
 int pinGreen = 7;
 int pinBlue  = 8;
 
+// Colour state variables
+byte R = 10;
+byte G = 20;
+byte B = 50;
 // Initial colour = Green
 int H = 120; // 0-360
 int S = 100; // 0-100
 int I =  10; // 0-100
 
-
-// IR sensor
-#define IR_INPUT A2
-#define IR_LED   9
-
-int IR_val = 0;
 
 
 // the setup routine runs once when you press reset:
@@ -57,30 +72,153 @@ void setup() {
   mySerial.println("Connected!");
 }
 
+
+
 // the loop routine runs over and over again forever:
 void loop() {
- 
-/*
-  i = 0;
-  len = 0;
-  mode = '\0';
-  temp = 0;
 
-  while (mySerial.available()) {
-    buf[i] = mySerial.read();
-    i++;
+  if (IR_enabled) {
+    // Collect IR readings every cycle
+    digitalWrite(IR_LED, HIGH);
+    IR_val = 0.8*IR_val + 0.2*analogRead(IR_INPUT);
+    digitalWrite(IR_LED, LOW);
+  } else {
+    IR_val = 0;
   }
-*/
 
-  // Collect every cycle
-  digitalWrite(IR_LED, HIGH);
-  IR_val = 0.8*IR_val + 0.2*analogRead(IR_INPUT);
-  digitalWrite(IR_LED, LOW);
+  // Map IR readings
+//  I = constrain(IR_val/2, 0, 100);
+  // H = map(IR_val, 40, 400, 120, 0);
+  // H = constrain(H, 0, 120);
+  
 
-  I = constrain(IR_val/2, 0, 100);
-  H = map(IR_val, 40, 400, 120, 0);
-  H = constrain(H, 0, 120);
+  // Read serial data
+  if (mySerial.available()) {
+    // Empty cmd array
+    for (i = 0; i < 6; i++) {
+      cmd[i] = 0;
+    }
+    
+    // Read 1st byte - Command 1
+    cmd[0] = GetNextByte();
 
+    if (cmd[0] == myAddr)  {
+      // Address to myself
+      // Read R G B
+      R = GetNextByte();
+      G = GetNextByte();
+      B = GetNextByte();
+      cmdLength = 4;
+      
+    } else if (cmd[0] == 0xFF) {
+      // Address to all
+      // Read 2nd byte - Command 2
+      cmd[1] = GetNextByte();
+      
+      switch (cmd[1]) {
+        case 0xAA: // Node count
+          cmd[2] = GetNextByte();   // Current node count
+          myAddr = cmd[2];          // This node takes this count (from 0)
+          cmd[2]++;                 // Increment to prepare for sending
+          cmdLength = 3;
+          break;
+          
+        case 0x00: // All Off
+          R = 0;
+          G = 0;
+          B = 0;
+          cmdLength = 2;
+          break;
+          
+        case 0x01: // All to RGB
+          cmd[2] = GetNextByte(); // R
+          cmd[3] = GetNextByte(); // G
+          cmd[4] = GetNextByte(); // B
+          R = cmd[2];
+          G = cmd[3];
+          B = cmd[4];
+          cmdLength = 5;
+          break;
+          
+        case 0x02: // All to HSI
+          cmd[2] = GetNextByte(); // H Upper 
+          cmd[3] = GetNextByte(); // H Lower
+          cmd[4] = GetNextByte(); // S
+          cmd[5] = GetNextByte(); // I
+          // Convert HSI to R, G, B
+          cmdLength = 6;
+          break;
+          
+        case 0x03: // Read IR
+          cmd[2] = GetNextByte(); // Address
+          cmd[3] = GetNextByte(); // IR
+          if (cmd[2] == myAddr) cmd[3] = IR_val;
+          cmdLength = 4;
+          break;
+          
+        case 0x04: // Max IR
+          cmd[2] = GetNextByte(); // IR
+          cmd[3] = GetNextByte(); // Address
+          if (IR_val > cmd[2]) { 
+            cmd[2] = IR_val;
+            cmd[3] = myAddr;
+          }
+          cmdLength = 4;
+          break;
+          
+        case 0x05: // Update nodes
+          cmdLength = 2;
+          break;
+          
+        case 0x06: // Enable IR
+          cmd[2] = GetNextByte(); // Address
+          if (cmd[2] == myAddr) IR_enabled = true;
+          cmdLength = 3;
+          break;
+          
+        case 0x07: // Disable IR
+          cmd[2] = GetNextByte(); // Address
+          if (cmd[2] == myAddr) IR_enabled = false;
+          cmdLength = 3;
+          break;
+          
+        case 0x08: // Enable all IR
+          IR_enabled = true;
+          cmdLength = 2;
+          break;
+          
+        case 0x09: // Disable all IR
+          IR_enabled = false;
+          cmdLength = 2;
+          break;
+      }
+      forward = true;
+    } else {
+      // cmd[0] not for this node or broadcast
+      // Address to other nodes
+      // Read R G B and store
+      cmd[1] = GetNextByte(); // R
+      cmd[2] = GetNextByte(); // G
+      cmd[3] = GetNextByte(); // B
+      cmdLength = 4;
+      forward = true;
+    }
+
+    // Forward the command if required
+    if (forward) {
+      for (i = 0; i < cmdLength; i++) {
+        mySerial.write(cmd[i]);
+      }
+      forward = false;
+    }
+    
+  }
+
+  setRGB(R, G, B);
+
+  
+
+  /*
   while (mySerial.available()) {
     buf[i] = mySerial.read();
     
@@ -94,6 +232,7 @@ void loop() {
     
     i++;
   }
+  */
 
   /*
   if (mySerial.available()) {
@@ -108,6 +247,7 @@ void loop() {
   }
   */
 
+  /*
   // Consume the buffer if ready
   if (serialReady) {
     len = i; // length, also index of first empty character
@@ -178,32 +318,17 @@ void loop() {
   
     serialReady = false;
   }
-  
-
-  setHSI(H, 0.01 * S, 0.01 * I);
-
-  /*
-  int led;
-  for (led = 6; led <=8; led++) {
-    for (i = 0; i < 255; i=i+5) {
-      analogWrite(led, i);
-      delay(5);
-    }
-    for (i = 255; i > 0; i=i-5) {
-      analogWrite(led, i);
-      delay(5);
-    }
-  }
   */
   
-  /*
-  // Loop Hue from 0-360
-  for (H = 0; H <= 360; H++) {
-    setHSI(H, 0.01 * S, 0.01 * I);
-    delay(10);
-  }
-  */
+
+  // setHSI(H, 0.01 * S, 0.01 * I);
   
+}
+
+
+byte GetNextByte() {
+  while (!mySerial.available()) {  }
+  return mySerial.read();
 }
 
 
