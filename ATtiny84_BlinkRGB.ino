@@ -21,12 +21,7 @@ bool forward;      // Flag to forward current command to next node
 byte cmd[6];       // Command array
 int cmdLength;     // Command bytes received
 
-byte buf[20];
 int i = 0;         // general counter
-int len = 0;       // buffer length (0-based)
-int temp = 0;      // current integer built up
-char mode = '\0';  // current mode (H/S/I)
-bool serialReady = false;
 
 
 // IR sensor
@@ -85,11 +80,6 @@ void loop() {
   } else {
     IR_val = 0;
   }
-
-  // Map IR readings
-//  I = constrain(IR_val/2, 0, 100);
-  // H = map(IR_val, 40, 400, 120, 0);
-  // H = constrain(H, 0, 120);
   
 
   // Read serial data
@@ -214,114 +204,8 @@ void loop() {
     
   }
 
+  // Write out RGB to LED
   setRGB(R, G, B);
-
-  
-
-  /*
-  while (mySerial.available()) {
-    buf[i] = mySerial.read();
-    
-    // If newline or brightness encountered or buffer full
-    if (buf[i] == '\r' || buf[i] == '\n' || i==19) {
-      i++;
-      buf[i] = '\0';      // terminate the string
-      serialReady = true; // mark for processing
-      break;
-    }
-    
-    i++;
-  }
-  */
-
-  /*
-  if (mySerial.available()) {
-    while (true) {
-      buf[i] = mySerial.read();
-      if (buf[i] == '\r' || buf[i] == '\n') {
-        i++;
-        break;
-      }
-      i++;
-    }
-  }
-  */
-
-  /*
-  // Consume the buffer if ready
-  if (serialReady) {
-    len = i; // length, also index of first empty character
-  
-    // Loop through all characters saved
-    for (i = 0; i < len; i++) {
-      // Check for CR / LF
-      switch(buf[i]) {
-        case 13: // CR
-        case 10: // LF
-        case 0:
-          break;
-        case 'H':
-        case 'S':
-        case 'I':
-        case 'h':
-        case 's':
-        case 'i':
-          // Detect mode and reset temp variable
-          // Write out the last mode if it exists
-          if (mode=='H' || mode=='h') H = temp;
-          if (mode=='S' || mode=='s') S = temp;
-          if (mode=='I' || mode=='i') I = temp;
-          // Save the new mode
-          mode = buf[i];
-          temp = 0;
-          break;
-        case 'd':
-          // IR
-          mySerial.print("IR: ");
-          mySerial.println(IR_val);
-          break;
-        default:
-          // Detect numbers
-          if (buf[i]>='0' && buf[i]<='9') {
-            temp = temp*10; // move by 1 position
-            temp = temp + (buf[i]-'0'); // Add the equivalent value
-          }
-      }
-    }
-            
-    // Write out the last detected mode if it exists
-    if (mode=='H' || mode=='h') H = temp;
-    if (mode=='S' || mode=='s') S = temp;
-    if (mode=='I' || mode=='i') I = temp;
-  
-    // Report out
-    if (len > 0) {
-      //mySerial.println(buf);
-      mySerial.print("H ");
-      mySerial.print(H);
-      mySerial.print(" S ");
-      mySerial.print(S);
-      mySerial.print(" I ");
-      mySerial.println(I);
-    }
-
-    // empty buffer
-    for (i = 0; i <= len; i++) {
-      buf[i] = '\0';
-    }
-
-    // reset
-    i = 0;
-    len = 0;
-    mode = '\0';
-    temp = 0;
-  
-    serialReady = false;
-  }
-  */
-  
-
-  // setHSI(H, 0.01 * S, 0.01 * I);
   
 }
 
