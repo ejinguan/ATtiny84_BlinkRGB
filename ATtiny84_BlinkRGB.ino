@@ -29,7 +29,7 @@ int i = 0;         // general counter
 #define IR_LED   9
 
 // IR state variables
-int IR_val = 0;
+byte IR_val = 0;
 bool IR_enabled = true;
 
 
@@ -75,7 +75,7 @@ void loop() {
   if (IR_enabled) {
     // Collect IR readings every cycle
     digitalWrite(IR_LED, HIGH);
-    IR_val = 0.8*IR_val + 0.2*analogRead(IR_INPUT);
+    IR_val = 0.8*IR_val + 0.2*(analogRead(IR_INPUT)/4);
     digitalWrite(IR_LED, LOW);
   } else {
     IR_val = 0;
